@@ -1,0 +1,12 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: olm-testing
+  namespace: olm-test
+spec:
+  source: openshift-olm-test
+  sourceNamespace: olm-test
+  #YOU NEED TO ADD THE CSV FILE HERE!
+  name: openshiftansibleservicebroker
+  startingCSV: openshiftansibleservicebroker.v4.1.0
+  channel: stable
