@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
+if [ "${DEBUG:-}" = "true" ]; then
+	set -x
+fi
 
 TEST_NAMESPACE=${TEST_NAMESPACE:-olm-test}
 
+# Get the manifests dir where the package and version dir are.
+MANIFEST_DIR=${MANIFEST_DIR:-$(realpath deploy/manifests)}
+
+# Version that your testing. folder where CRDs and CSV exist must match.
+VERSION=${VERSION:-4.1}
 
 # indent is used to indent the yaml created from manifest directory correctly
 indent() {
@@ -23,7 +31,7 @@ test::object_assert() {
   local request=$3
   local expected=$4
   local args=${5:-}
-  
+
   for j in $(seq 1 ${tries}); do
     res=$(eval oc get ${args} ${object} -o jsonpath=\"${request}\")
     echo $res
@@ -47,35 +55,18 @@ test::object_assert() {
   return 1
 }
 
-# TODO: 
-# Need to substitute envvar to get the correct image. You will need to do this for each of the
-# components that you need to change in the CSV.
-export component=ansible-service-broker
-NEW_IMAGE=$(echo $IMAGE_FORMAT | envsubst '${component}')
-
-echo $NEW_IMAGE
-
-# Get the manifests dir where the package and version dir are.
-DIR=$(cd $(dirname "$0")/deploy/manifests && pwd)
-
-# Version that your testing. folder where CRDs and CSV exist must match.
-VERSION=${VERSION:-4.1}
-
 # Name of the configmap that we will create
-NAME=${NAME:-openshift-olm-test}
+CONFIGMAP_NAME=${CONFIGMAP_NAME:-openshift-olm-test}
 
-# Update the CSV with the new-image 
-sed "s,quay.io/openshift/origin-ansible-service-broker,$NEW_IMAGE," -i $DIR/$VERSION/*version.yaml
-
-CRD=$(cat $(ls $DIR/$VERSION/*crd.yaml) | grep -v -- "---" | indent apiVersion)
-CSV=$(cat $(ls $DIR/$VERSION/*version.yaml) | grep -v -- "---" |  indent apiVersion)
-PKG=$(cat $(ls $DIR/*package.yaml) | indent packageName)
+CRD=$(sed '/^#!.*$/d' $MANIFEST_DIR/$VERSION/*crd.yaml | grep -v -- "---" | indent apiVersion)
+CSV=$(sed '/^#!.*$/d' $MANIFEST_DIR/$VERSION/*version.yaml | grep -v -- "---" |  indent apiVersion)
+PKG=$(sed '/^#!.*$/d' $MANIFEST_DIR/*package.yaml | indent packageName)
 
 cat > /tmp/configmap.yaml <<EOF | sed 's/^  *$//'
 kind: ConfigMap
 apiVersion: v1
 metadata:
-  name: $NAME
+  name: $CONFIGMAP_NAME
 data:
   customResourceDefinitions: |-
 $CRD
@@ -85,12 +76,15 @@ $CSV
 $PKG
 EOF
 
+CSV_CHANNEL=$(sed -nr 's,.*name: (.*),\1,p' $MANIFEST_DIR/*package.yaml)
+CURRENT_CSV=$(sed -nr 's,.*currentCSV: (.*),\1,p' $MANIFEST_DIR/*package.yaml)
+CSV_NAME=$(echo ${CURRENT_CSV} | cut -d. -f1)
+
 oc create -n $TEST_NAMESPACE -f /tmp/configmap.yaml
 oc create -n $TEST_NAMESPACE -f catalogsource.yaml
 oc create -n $TEST_NAMESPACE -f operatorgroup.yaml
-oc create -n $TEST_NAMESPACE -f subscription.yaml
+oc process -f subscription.yaml -p CSV_NAME=${CSV_NAME} -p STARTING_CSV=${CURRENT_CSV} -p CHANNEL=${CSV_CHANNEL} | oc create -n $TEST_NAMESPACE -f -
 
 test::object_assert 100 subscriptions.operators.coreos.com/olm-testing "{.status.state}" AtLatestKnown "-n $TEST_NAMESPACE"
 # Need to change to match the name of the CSV with version.
-test::object_assert 50 clusterserviceversions.operators.coreos.com/openshiftansibleservicebroker.v${VERSION}.0 "{.status.phase}" Succeeded "-n $TEST_NAMESPACE"
-
+test::object_assert 50 clusterserviceversions.operators.coreos.com/${CURRENT_CSV} "{.status.phase}" Succeeded "-n $TEST_NAMESPACE"
