@@ -7,20 +7,29 @@ metadata:
     tags: "e2e"
 objects:
 - apiVersion: operators.coreos.com/v1alpha1
+  kind: CatalogSource
+  metadata:
+    name: openshift-olm-test${SUFFIX}
+  spec:
+    name: openshift-olm-test${SUFFIX}
+    sourceType: internal
+    configMap: ${CONFIGMAP_NAME}
+    displayName: ${CONFIGMAP_NAME}
+    publisher: Operator Framework
+- apiVersion: operators.coreos.com/v1alpha1
   kind: Subscription
   metadata:
-    name: olm-testing
-    namespace: olm-test
+    name: olm-testing${SUFFIX}
   spec:
-    source: openshift-olm-test
-    sourceNamespace: olm-test
-    name: ${CSV_NAME}
+    source: openshift-olm-test${SUFFIX}
+    sourceNamespace: ${TEST_NAMESPACE}
+    name: ${PACKAGE_NAME}
     startingCSV: ${STARTING_CSV}
     channel: ${CHANNEL}
 parameters:
 -
-  description: 'name of the CSV to use for the subscription'
-  name: CSV_NAME
+  description: 'name of the package to use for the subscription'
+  name: PACKAGE_NAME
   value: openshiftansibleservicebroker
 -
   description: 'the starting CSV to use for the subscription'
@@ -30,3 +39,13 @@ parameters:
   description:
   name: CHANNEL
   value: stable
+-
+  description:
+  name: TEST_NAMESPACE
+  value: olm-test
+- description:
+  name: CONFIGMAP_NAME
+  value: openshift-olm-test
+- description:
+  name: SUFFIX
+  value: ""

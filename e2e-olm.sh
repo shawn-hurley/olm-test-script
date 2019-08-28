@@ -4,6 +4,9 @@ if [ "${DEBUG:-}" = "true" ]; then
 fi
 
 TEST_NAMESPACE=${TEST_NAMESPACE:-olm-test}
+TARGET_NAMESPACE=${TARGET_NAMESPACE:-olm-test}
+CREATE_OPERATORGROUP=${CREATE_OPERATORGROUP:-"true"}
+OPERATOR_IMAGE=${OPERATOR_IMAGE:-""}
 
 # Get the manifests dir where the package and version dir are.
 MANIFEST_DIR=${MANIFEST_DIR:-$(realpath deploy/manifests)}
@@ -59,8 +62,13 @@ test::object_assert() {
 CONFIGMAP_NAME=${CONFIGMAP_NAME:-openshift-olm-test}
 
 CRD=$(sed '/^#!.*$/d' $MANIFEST_DIR/$VERSION/*crd.yaml | grep -v -- "---" | indent apiVersion)
-CSV=$(sed '/^#!.*$/d' $MANIFEST_DIR/$VERSION/*version.yaml | grep -v -- "---" |  indent apiVersion)
 PKG=$(sed '/^#!.*$/d' $MANIFEST_DIR/*package.yaml | indent packageName)
+CSV=$(sed '/^#!.*$/d' $MANIFEST_DIR/$VERSION/*version.yaml | sed 's/namespace: placeholder/namespace: '$TEST_NAMESPACE'/' |grep -v -- "---" |  indent apiVersion)
+
+if [ -n "${OPERATOR_IMAGE:-}" ] ; then
+  CSV=$(echo "$CSV" | sed -e "s~containerImage:.*+~containerImage: ${OPERATOR_IMAGE}~" | indent apiVersion)
+  CSV=$(echo "$CSV" | sed -e "s~image:.*~image: ${OPERATOR_IMAGE}\n~" | indent ApiVersion)
+fi
 
 cat > /tmp/configmap.yaml <<EOF | sed 's/^  *$//'
 kind: ConfigMap
@@ -76,15 +84,21 @@ $CSV
 $PKG
 EOF
 
-CSV_CHANNEL=$(sed -nr 's,.*name: (.*),\1,p' $MANIFEST_DIR/*package.yaml)
+CSV_CHANNEL=$(sed -nr 's,.*name: \"?([^"][^"]*)\"?,\1,p' $MANIFEST_DIR/*package.yaml)
 CURRENT_CSV=$(sed -nr 's,.*currentCSV: (.*),\1,p' $MANIFEST_DIR/*package.yaml)
-CSV_NAME=$(echo ${CURRENT_CSV} | cut -d. -f1)
+PACKAGE_NAME=$(sed -nr 's,.*packageName: (.*),\1,p' $MANIFEST_DIR/*package.yaml)
 
 oc create -n $TEST_NAMESPACE -f /tmp/configmap.yaml
-oc create -n $TEST_NAMESPACE -f catalogsource.yaml
-oc create -n $TEST_NAMESPACE -f operatorgroup.yaml
-oc process -f subscription.yaml -p CSV_NAME=${CSV_NAME} -p STARTING_CSV=${CURRENT_CSV} -p CHANNEL=${CSV_CHANNEL} | oc create -n $TEST_NAMESPACE -f -
+if [ "${CREATE_OPERATORGROUP}" == "true" ] ; then
+  oc process -f "$(dirname $0)/operatorgroup-template.yaml" -p TARGET_NAMESPACE=${NAMESPACE} | oc create -n $TEST_NAMESPACE -f -
+fi
 
-test::object_assert 100 subscriptions.operators.coreos.com/olm-testing "{.status.state}" AtLatestKnown "-n $TEST_NAMESPACE"
+oc process -f "$(dirname $0)/subscription.yaml" -p SUFFIX=${SUFFIX:-} -p CONFIGMAP_NAME=${CONFIGMAP_NAME:-} -p TEST_NAMESPACE=${NAMESPACE} -p PACKAGE_NAME=${PACKAGE_NAME} -p STARTING_CSV=${CURRENT_CSV} -p CHANNEL=${CSV_CHANNEL} | oc create -n $TEST_NAMESPACE -f -
+if [ "$?" != "0" ] ; then
+  echo "Error processing template"
+  exit 1
+fi
+
+test::object_assert 100 subscriptions.operators.coreos.com/olm-testing${SUFFIX:-} "{.status.catalogHealth[?(@.catalogSourceRef.name=='openshift-olm-test${SUFFIX:-}')].healthy}" "true" "-n $TEST_NAMESPACE"
 # Need to change to match the name of the CSV with version.
 test::object_assert 50 clusterserviceversions.operators.coreos.com/${CURRENT_CSV} "{.status.phase}" Succeeded "-n $TEST_NAMESPACE"
