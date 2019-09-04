@@ -10,10 +10,4 @@ objects:
   kind: OperatorGroup
   metadata:
     name: openshift-olm-test
-  spec:
-    targetNamespaces:
-    - "${TARGET_NAMESPACE}"
-parameters:
-- description:
-  name: TARGET_NAMESPACE
-  value: olm-test
+  spec: {}
