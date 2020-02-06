@@ -4,15 +4,14 @@
 This script can be used to test install your operator's manifest file in an OCP cluster
 
 ### Variables
-| *DEBUG* | default false | Set this to true to enable debug output of the e2e-olm script |
 
-| *TEST_NAMESPACE* | default olm-test | This is the namespace where the test subscription, operator group, and csv will be installed to. Note: this will not be created by this script. |
-
-| *TARGET_NAMESPACE* | default olm-test | This is the namespace which contains the CR managed by this operator |
-
-| *MANIFEST_DIR* | default ./deploy/manifests | This is the path to your operator's manifest directory. |
-
-| *VERSION* | default 4.1 | The version directory under $MANIFEST_DIR where your operator's csv file exists. |
+| Name               | Default value      | Description                                                                                                                                     |
+| ------------------ | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| *DEBUG*            | false              | Set this to true to enable debug output of the e2e-olm script                                                                                   |
+| *TEST_NAMESPACE*   | olm-test           | This is the namespace where the test subscription, operator group, and csv will be installed to. Note: this will not be created by this script. |
+| *TARGET_NAMESPACE* | olm-test           | This is the namespace which contains the CR managed by this operator                                                                            |
+| *MANIFEST_DIR*     | ./deploy/manifests | This is the path to your operator's manifest directory.                                                                                         |
+| *VERSION*          | 4.1                | The version directory under $MANIFEST_DIR where your operator's csv file exists.                                                                |
 
 ### Execution
 MANIFEST_DIR=/data/src/github.com/openshift/ansible-service-broker ./e2e-olm.sh
@@ -39,3 +38,11 @@ If that does not resolve this, verify that your \*package.yaml file is pointing 
 Your operator may not have been able to start as part of the installation; check the events of your operator pod and adjust your manifest accordingly.
 oc get pods -n olm-test
 oc describe pod -n olm-test {pod_name}
+
+### Notes for OSX
+
+To use this script on OSX please ensure the following packages are installed via Homebrew:
+
+``` shell
+brew install bash coreutils sed
+```
