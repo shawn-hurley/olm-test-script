@@ -10,6 +10,7 @@ TEST_NAMESPACE=${TEST_NAMESPACE:-olm-test}
 TARGET_NAMESPACE=${TARGET_NAMESPACE:-olm-test}
 CREATE_OPERATORGROUP=${CREATE_OPERATORGROUP:-"true"}
 OPERATOR_IMAGE=${OPERATOR_IMAGE:-""}
+GNUSED=$( ([[ $(uname) == 'Linux' ]] && echo "sed") || ([[ $(uname) == 'Darwin' ]] && echo "gsed") || echo "sed" )
 
 # Get the manifests dir where the package and version dir are.
 MANIFEST_DIR=${MANIFEST_DIR:-$(realpath deploy/manifests)}
@@ -20,7 +21,7 @@ VERSION=${VERSION:-4.1}
 # indent is used to indent the yaml created from manifest directory correctly
 indent() {
   INDENT="      "
-  sed "s/^/$INDENT/" | sed "s/^${INDENT}\($1\)/${INDENT:0:-2}- \1/"
+  $GNUSED "s/^/$INDENT/" | $GNUSED "s/^${INDENT}\($1\)/${INDENT:0:-2}- \1/"
 }
 
 # TODO: RIPPED from the upstream kube test shell library. Everyone will need
@@ -72,16 +73,16 @@ test::object_assert() {
 # Name of the configmap that we will create
 CONFIGMAP_NAME=${CONFIGMAP_NAME:-openshift-olm-test}
 
-CRD=$(sed '/^#!.*$/d' $MANIFEST_DIR/$VERSION/*crd.yaml | grep -v -- "---" | indent apiVersion)
-PKG=$(sed '/^#!.*$/d' $MANIFEST_DIR/*package.yaml | indent packageName)
-CSV=$(sed '/^#!.*$/d' $MANIFEST_DIR/$VERSION/*version.yaml | sed 's/namespace: placeholder/namespace: '$TEST_NAMESPACE'/' |grep -v -- "---" |  indent apiVersion)
+CRD=$($GNUSED '/^#!.*$/d' $MANIFEST_DIR/$VERSION/*crd.yaml | grep -v -- "---" | indent apiVersion)
+PKG=$($GNUSED '/^#!.*$/d' $MANIFEST_DIR/*package.yaml | indent packageName)
+CSV=$($GNUSED '/^#!.*$/d' $MANIFEST_DIR/$VERSION/*version.yaml | $GNUSED 's/namespace: placeholder/namespace: '$TEST_NAMESPACE'/' |grep -v -- "---" |  indent apiVersion)
 
 if [ -n "${OPERATOR_IMAGE:-}" ] ; then
-  CSV=$(echo "$CSV" | sed -e "s~containerImage:.*~containerImage: ${OPERATOR_IMAGE}~" | indent apiVersion)
-  CSV=$(echo "$CSV" | sed -e "s~image:.*~image: ${OPERATOR_IMAGE}\n~" | indent ApiVersion)
+  CSV=$(echo "$CSV" | $GNUSED -e "s~containerImage:.*~containerImage: ${OPERATOR_IMAGE}~" | indent apiVersion)
+  CSV=$(echo "$CSV" | $GNUSED -e "s~image:.*~image: ${OPERATOR_IMAGE}\n~" | indent ApiVersion)
 fi
 
-cat > /tmp/configmap.yaml <<EOF | sed 's/^  *$//'
+cat > /tmp/configmap.yaml <<EOF | $GNUSED 's/^  *$//'
 kind: ConfigMap
 apiVersion: v1
 metadata:
@@ -95,9 +96,9 @@ $CSV
 $PKG
 EOF
 
-CSV_CHANNEL=$(sed -nr 's,.*name: \"?([^"][^"]*)\"?,\1,p' $MANIFEST_DIR/*package.yaml)
-CURRENT_CSV=$(sed -nr 's,.*currentCSV: (.*),\1,p' $MANIFEST_DIR/*package.yaml)
-PACKAGE_NAME=$(sed -nr 's,.*packageName: (.*),\1,p' $MANIFEST_DIR/*package.yaml)
+CSV_CHANNEL=$($GNUSED -nr 's,.*name: \"?([^"][^"]*)\"?,\1,p' $MANIFEST_DIR/*package.yaml)
+CURRENT_CSV=$($GNUSED -nr 's,.*currentCSV: (.*),\1,p' $MANIFEST_DIR/*package.yaml)
+PACKAGE_NAME=$($GNUSED -nr 's,.*packageName: (.*),\1,p' $MANIFEST_DIR/*package.yaml)
 
 oc create -n $TEST_NAMESPACE -f /tmp/configmap.yaml
 if [ "${CREATE_OPERATORGROUP}" == "true" ] ; then
