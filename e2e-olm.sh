@@ -109,7 +109,7 @@ if [ "${CREATE_OPERATORGROUP}" == "true" ] ; then
   fi
 fi
 
-oc process -f "$(dirname $0)/subscription.yaml" -p SUFFIX=${SUFFIX:-} -p CONFIGMAP_NAME=${CONFIGMAP_NAME:-} -p TEST_NAMESPACE=${NAMESPACE} -p PACKAGE_NAME=${PACKAGE_NAME} -p STARTING_CSV=${CURRENT_CSV} -p CHANNEL=${CSV_CHANNEL} | oc create -n $TEST_NAMESPACE -f -
+oc process -f "$(dirname $0)/subscription.yaml" -p SUFFIX=${SUFFIX:-} -p CONFIGMAP_NAME=${CONFIGMAP_NAME:-} -p TEST_NAMESPACE=${TEST_NAMESPACE} -p PACKAGE_NAME=${PACKAGE_NAME} -p STARTING_CSV=${CURRENT_CSV} -p CHANNEL=${CSV_CHANNEL} | oc create -n $TEST_NAMESPACE -f -
 if [ "$?" != "0" ] ; then
   echo "Error processing template"
   exit 1
